@@ -1,0 +1,46 @@
+# Real public data sources. All keyless and deterministically cached.
+seed: 7
+
+ngsim:
+  # USDOT ITS DataHub -- Next Generation Simulation (NGSIM) vehicle trajectories.
+  # Freeway site I-80 (Emeryville, CA), real 10 Hz trajectories with leader/follower
+  # linkage (preceding/following) and space/time headway.
+  dataset_id: "8ect-6jqj"
+  base_url: "https://data.transportation.gov/resource/8ect-6jqj.json"
+  location: "i-80"
+  dt: 0.1                 # seconds (10 Hz, native NGSIM cadence)
+  max_rows: 1000000       # bounded slice pulled + cached
+  page: 50000
+
+ved:
+  # Vehicle Energy Dataset (University of Michigan, Ann Arbor), real on-road OBD /
+  # powertrain telemetry. Provides the real in-vehicle bus-signal base for the
+  # cross-layer IDS and the energy model calibration.
+  archive_url: "https://raw.githubusercontent.com/gsoh/VED/master/Data/VED_DynamicData_Part1.7z"
+  week_file: "VED_171101_week.csv"   # one real week extracted + sliced
+  n_vehicles: 40                     # bounded, deterministic slice
+  min_trip_samples: 200
+
+can:
+  # Optional real-labeled CAN-injection drop-in (HCRL Car-Hacking / OTIDS, gated
+  # behind IEEE DataPort). If CSVs are placed in data/raw/can/, the loader uses them.
+  # Otherwise the cross-layer IDS runs on real VED OBD streams with injected,
+  # labeled bus attacks (disclosed). Not required to reproduce the paper.
+  manual_dir: "data/raw/can"
+
+platoon:
+  min_len: 4             # vehicles per string (N >= 4)
+  max_len: 6
+  min_window: 150        # >= 15 s at 10 Hz of continuous leader-follower linkage
+  max_window: 350
+  max_strings: 120
+
+split:
+  # Strict split by independent platoon/string id AND chronological order.
+  train: 0.6
+  val: 0.2
+  test: 0.2
+
+cache_dir: "data/raw"
+processed_dir: "data/processed"
+manifest: "data/manifest.json"

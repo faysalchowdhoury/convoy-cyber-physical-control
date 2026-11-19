@@ -1,0 +1,48 @@
+{
+  "sources": {
+    "ngsim_i80": {
+      "url": "https://data.transportation.gov/resource/8ect-6jqj.json",
+      "dataset_id": "8ect-6jqj",
+      "location": "i-80",
+      "dt_s": 0.1,
+      "rows": 1000000,
+      "vehicles": 800,
+      "units": "SI (converted from NGSIM feet)",
+      "note": "Real 10 Hz trajectories with native preceding/following linkage.",
+      "retrieved_utc": "2026-11-19T15:37:30Z"
+    },
+    "ved": {
+      "url": "https://raw.githubusercontent.com/gsoh/VED/master/Data/VED_DynamicData_Part1.7z",
+      "week_file": "VED_171101_week.csv",
+      "rows": 89058,
+      "vehicles": 40,
+      "signals": [
+        "VehId",
+        "Trip",
+        "Timestamp(ms)",
+        "Vehicle Speed[km/h]",
+        "MAF[g/sec]",
+        "Engine RPM[RPM]",
+        "Absolute Load[%]",
+        "Fuel Rate[L/hr]",
+        "HV Battery Current[A]",
+        "HV Battery Voltage[V]",
+        "HV Battery SOC[%]"
+      ],
+      "note": "Real on-road OBD/powertrain telemetry (U. Michigan VED).",
+      "retrieved_utc": "2026-11-19T15:37:30Z"
+    },
+    "platoons": {
+      "n_strings": 98,
+      "split_sizes": {
+        "train": 59,
+        "val": 20,
+        "test": 19
+      },
+      "ved_mean_power_w": 6497.7,
+      "model_mean_power_w": 2779.4,
+      "note": "Real NGSIM strings (vehicle-disjoint); energy = physics model with literature coefficients, VED magnitude-checked.",
+      "retrieved_utc": "2026-11-19T15:37:32Z"
+    }
+  }
+}

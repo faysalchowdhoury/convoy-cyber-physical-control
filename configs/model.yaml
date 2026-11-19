@@ -1,0 +1,35 @@
+# Physics constants, controller feasibility bounds, and model hyperparameters.
+# Units: SI throughout (m, s, m/s, m/s^2, W). NGSIM native feet are converted to
+# metres on ingest.
+
+physics:
+  dt: 0.1
+  s_min: 2.0            # minimum standstill gap (m)
+  tau_safe: 1.2         # constant-time-headway safety spacing policy (s)
+  a_max_nominal: 2.5    # m/s^2 on high-friction surface (mu ~ 0.9)
+  a_min_nominal: -5.0   # m/s^2 (comfortable/actuator braking)
+  jerk_max: 10.0        # m/s^3
+  veh_mass: 1800.0      # kg (used only for the power-ramp proxy)
+  c_rr: 0.012           # rolling resistance coefficient
+  c_aero: 0.40          # 0.5 * rho * Cd * A lumped (N per (m/s)^2)
+  dP_max: 60000.0       # powertrain power ramp limit per step (W)
+
+friction_regimes:        # surface-friction mu sensitivity sweep (parameterized)
+  high: 0.9
+  medium: 0.6
+  low: 0.35
+
+controller:
+  hidden: 64
+  layers: 2
+  lr: 0.003
+  epochs: 40
+  batch: 256
+  weight_decay: 1.0e-5
+  soft_penalty_weight: 5.0   # for the soft-penalty PINN ablation only
+
+mpc:
+  horizon: 10
+  q_gap: 1.0
+  q_speed: 0.5
+  r_u: 0.05

@@ -1,0 +1,22 @@
+seed: 7
+
+# Communication / attack regimes applied at evaluation time (eval-only).
+comm_regimes:
+  clean:        {drop: 0.0,  latency_steps: 0}
+  drop30:       {drop: 0.30, latency_steps: 1}
+  drop70:       {drop: 0.70, latency_steps: 2}
+
+attack_regimes:
+  # V2V-side attacks are injected-labeled onto real telemetry (no public labeled
+  # V2V-attack set). CAN-side attacks are injected-labeled onto real VED OBD streams
+  # (or real HCRL labels if the drop-in is present).
+  none:         {kind: none}
+  v2v_spoof:    {kind: v2v_bias,   magnitude: 4.0}   # m/s speed/accel bias on predecessor telemetry
+  v2v_replay:   {kind: v2v_replay, window: 15}
+  can_inject:   {kind: can_bias,  signal: speed, magnitude: 6.0}
+
+eval:
+  friction_sweep: [high, medium, low]
+  attack_fraction: 0.25     # fraction of test strings carrying an attack
+  # operating point: clean-train window-max quantile (~5% target false-positive rate)
+  guard_threshold_quantile: 0.95

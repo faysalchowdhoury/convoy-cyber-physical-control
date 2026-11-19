@@ -1,0 +1,276 @@
+{
+  "data": {
+    "n_strings": 98,
+    "sizes": {
+      "train": 59,
+      "val": 20,
+      "test": 19
+    },
+    "energy_model": "physics (literature coefficients)",
+    "ved_mean_power_w": 6497.7,
+    "model_mean_power_w": 2779.4
+  },
+  "energy_model": {
+    "type": "physics_literature_coefficients",
+    "mass": 1800.0,
+    "c_rr": 0.012,
+    "c_aero": 0.4,
+    "ved_mean_power_w": 6497.682979154338,
+    "model_mean_power_w": 2779.408888836928
+  },
+  "table1_control_energy": [
+    {
+      "method": "IDM/CACC",
+      "comms": "clean",
+      "friction": "high",
+      "spacing_rmse_m": 2.4609462691711426,
+      "speed_rmse_ms": 1.2060230811849533,
+      "string_stability": 7.285294339294141,
+      "headway_violation_pct": 36.684487300597574,
+      "collisions": 6,
+      "energy_kwh_km": 0.17330464848098615,
+      "latency_ms": 0.009174271111901854
+    },
+    {
+      "method": "IDM/CACC",
+      "comms": "drop30",
+      "friction": "medium",
+      "spacing_rmse_m": 2.572806176053169,
+      "speed_rmse_ms": 1.1987320046576178,
+      "string_stability": 10.037453699841894,
+      "headway_violation_pct": 35.24987210848812,
+      "collisions": 6,
+      "energy_kwh_km": 0.17383511923891543,
+      "latency_ms": 0.006608427155053005
+    },
+    {
+      "method": "IDM/CACC",
+      "comms": "drop70",
+      "friction": "low",
+      "spacing_rmse_m": 3.0208556792231307,
+      "speed_rmse_ms": 1.1860805481312813,
+      "string_stability": 3.773447972843581,
+      "headway_violation_pct": 33.49469313235778,
+      "collisions": 6,
+      "energy_kwh_km": 0.16911275873166182,
+      "latency_ms": 0.00811986341050354
+    },
+    {
+      "method": "MPC",
+      "comms": "clean",
+      "friction": "high",
+      "spacing_rmse_m": 1.8370360582789313,
+      "speed_rmse_ms": 1.3190844835078217,
+      "string_stability": 18.779815027670672,
+      "headway_violation_pct": 44.406794408813894,
+      "collisions": 6,
+      "energy_kwh_km": 0.17109335797648478,
+      "latency_ms": 0.1805074872324192
+    },
+    {
+      "method": "MPC",
+      "comms": "drop30",
+      "friction": "medium",
+      "spacing_rmse_m": 2.0598757260624274,
+      "speed_rmse_ms": 1.2993454913097606,
+      "string_stability": 10.626162365974245,
+      "headway_violation_pct": 43.96915406392477,
+      "collisions": 6,
+      "energy_kwh_km": 0.16992103960521843,
+      "latency_ms": 0.1661155294070799
+    },
+    {
+      "method": "MPC",
+      "comms": "drop70",
+      "friction": "low",
+      "spacing_rmse_m": 2.6238765348781348,
+      "speed_rmse_ms": 1.2890142775960252,
+      "string_stability": 5.738422623207365,
+      "headway_violation_pct": 41.7208653021258,
+      "collisions": 6,
+      "energy_kwh_km": 0.17038888012109143,
+      "latency_ms": 0.2177547138440157
+    },
+    {
+      "method": "Unconstrained-NN",
+      "comms": "clean",
+      "friction": "high",
+      "spacing_rmse_m": 10.173600423838545,
+      "speed_rmse_ms": 1.7115923111438376,
+      "string_stability": 1.2141135117959336,
+      "headway_violation_pct": 43.707593303346954,
+      "collisions": 588,
+      "energy_kwh_km": 0.09681195873296762,
+      "latency_ms": 0.11658769720757259
+    },
+    {
+      "method": "Unconstrained-NN",
+      "comms": "drop30",
+      "friction": "medium",
+      "spacing_rmse_m": 10.156375493024626,
+      "speed_rmse_ms": 1.7144895665192141,
+      "string_stability": 1.1875805890224642,
+      "headway_violation_pct": 43.97220013542953,
+      "collisions": 606,
+      "energy_kwh_km": 0.09680972212616261,
+      "latency_ms": 0.11726359209908227
+    },
+    {
+      "method": "Unconstrained-NN",
+      "comms": "drop70",
+      "friction": "low",
+      "spacing_rmse_m": 10.373787699446508,
+      "speed_rmse_ms": 1.7594075029960994,
+      "string_stability": 1.1101827651400753,
+      "headway_violation_pct": 43.12300736722944,
+      "collisions": 749,
+      "energy_kwh_km": 0.09711438711334835,
+      "latency_ms": 0.11909020274648113
+    },
+    {
+      "method": "Soft-PINN",
+      "comms": "clean",
+      "friction": "high",
+      "spacing_rmse_m": 8.1059973793988,
+      "speed_rmse_ms": 1.5151829145844369,
+      "string_stability": 0.7621922148697028,
+      "headway_violation_pct": 20.14129554934705,
+      "collisions": 7,
+      "energy_kwh_km": 0.1177720989292755,
+      "latency_ms": 0.12971266100158071
+    },
+    {
+      "method": "Soft-PINN",
+      "comms": "drop30",
+      "friction": "medium",
+      "spacing_rmse_m": 8.305640634606329,
+      "speed_rmse_ms": 1.5241306347786063,
+      "string_stability": 0.7929292141361652,
+      "headway_violation_pct": 20.919851320604955,
+      "collisions": 7,
+      "energy_kwh_km": 0.1164607724766439,
+      "latency_ms": 0.11402224507167251
+    },
+    {
+      "method": "Soft-PINN",
+      "comms": "drop70",
+      "friction": "low",
+      "spacing_rmse_m": 8.509113434972114,
+      "speed_rmse_ms": 1.5195590211485062,
+      "string_stability": 0.8796967208629052,
+      "headway_violation_pct": 20.04549411555093,
+      "collisions": 33,
+      "energy_kwh_km": 0.11648262020040974,
+      "latency_ms": 0.11559536559002584
+    },
+    {
+      "method": "D-PCNC",
+      "comms": "clean",
+      "friction": "high",
+      "spacing_rmse_m": 20.637554647707088,
+      "speed_rmse_ms": 2.869674425219495,
+      "string_stability": 2.1146823926094362,
+      "headway_violation_pct": 10.204584119211297,
+      "collisions": 4,
+      "energy_kwh_km": 0.13624009116202002,
+      "latency_ms": 0.23176751397075998
+    },
+    {
+      "method": "D-PCNC",
+      "comms": "drop30",
+      "friction": "medium",
+      "spacing_rmse_m": 20.574744625928055,
+      "speed_rmse_ms": 2.866769115000627,
+      "string_stability": 2.0639807884904027,
+      "headway_violation_pct": 10.45653483188404,
+      "collisions": 4,
+      "energy_kwh_km": 0.13629031894936103,
+      "latency_ms": 0.24404467139767513
+    },
+    {
+      "method": "D-PCNC",
+      "comms": "drop70",
+      "friction": "low",
+      "spacing_rmse_m": 20.366465128613463,
+      "speed_rmse_ms": 2.856474336406971,
+      "string_stability": 2.0477071438544394,
+      "headway_violation_pct": 10.986305596535617,
+      "collisions": 4,
+      "energy_kwh_km": 0.13586099273504698,
+      "latency_ms": 0.2316700750917848
+    }
+  ],
+  "table2_ablation": [
+    {
+      "method": "IDM/CACC",
+      "headway_violation_pct": 36.684487300597574,
+      "collisions": 6,
+      "string_stability": 7.285294339294141,
+      "energy_kwh_km": 0.17330464848098615,
+      "latency_ms": 0.009174271111901854
+    },
+    {
+      "method": "Soft-PINN",
+      "headway_violation_pct": 20.14129554934705,
+      "collisions": 7,
+      "string_stability": 0.7621922148697028,
+      "energy_kwh_km": 0.1177720989292755,
+      "latency_ms": 0.12971266100158071
+    },
+    {
+      "method": "Unconstrained-NN",
+      "headway_violation_pct": 43.707593303346954,
+      "collisions": 588,
+      "string_stability": 1.2141135117959336,
+      "energy_kwh_km": 0.09681195873296762,
+      "latency_ms": 0.11658769720757259
+    },
+    {
+      "method": "D-PCNC",
+      "headway_violation_pct": 10.204584119211297,
+      "collisions": 4,
+      "string_stability": 2.1146823926094362,
+      "energy_kwh_km": 0.13624009116202002,
+      "latency_ms": 0.23176751397075998
+    }
+  ],
+  "table3_detection": [
+    {
+      "attack": "V2V bias spoof",
+      "auroc": 0.9376951092611863,
+      "f1": 0.96875,
+      "detection_latency_ms": 0.0,
+      "fpr": 0.06451612903225806
+    },
+    {
+      "attack": "V2V replay",
+      "auroc": 0.6649323621227887,
+      "f1": 0.1142857142857143,
+      "detection_latency_ms": 1033.3333333333335,
+      "fpr": 0.06451612903225806
+    },
+    {
+      "attack": "CAN speed inject",
+      "auroc": 1.0,
+      "f1": 0.96875,
+      "detection_latency_ms": 0.0,
+      "fpr": 0.06451612903225806
+    },
+    {
+      "attack": "CAN load inject",
+      "auroc": 0.5,
+      "f1": 0.1142857142857143,
+      "detection_latency_ms": 450.0,
+      "fpr": 0.06451612903225806
+    }
+  ],
+  "convoy_resilience_under_attack": {
+    "attack": "V2V speed spoof (+4 m/s)",
+    "unguarded_collisions": 4,
+    "guarded_collisions": 4,
+    "unguarded_headway_violation_pct": 20.42660818021614,
+    "guarded_headway_violation_pct": 20.353540381812202,
+    "strings_evaluated": 19
+  },
+  "runtime_s": 85.6
+}
