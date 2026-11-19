@@ -26,21 +26,26 @@ import torch.nn as nn
 # --------------------------------------------------------------------------- #
 # Hard physical projection
 # --------------------------------------------------------------------------- #
-def project_command(u_raw, v_follow, gap, v_lead, a_lead, *, dt, s_min, tau_safe,
-                    a_min, a_max, du_max):
+def project_command(u_raw, v_follow, gap, closing_meas, a_lead_meas, *, dt, s_min,
+                    tau_safe, a_min, a_max, du_max):
     """Project raw accel command onto the physical feasible set (torch, batched).
 
-    All args are tensors broadcastable to ``u_raw``'s shape except the scalar
-    hyper-parameters. Returns the feasible command (same shape as ``u_raw``).
+    The safety bound uses only **measured / onboard** quantities -- the ego speed
+    ``v_follow``, the radar ``gap`` and its measured closing rate ``closing_meas``
+    (= measured d(gap)/dt), and a measured predecessor acceleration -- NOT the
+    reported V2V predecessor speed. This is what makes the filter robust to V2V
+    spoofing: a falsified predecessor broadcast can corrupt the policy's *proposal*
+    but not the projection's *safety guarantee*.
     """
     # (2) actuator + power-ramp interval
     hi = torch.minimum(a_max, du_max[1])
     lo = torch.maximum(a_min, du_max[0])
-    # (1) safety upper bound on u from the next-step headway constraint.
-    #   gap + (v_lead - v_follow)dt + 0.5(a_lead - u)dt^2 >= s_min + tau(v_follow + u dt)
+    # (1) safety upper bound on u from the next-step headway constraint, using the
+    #   measured closing rate: gap + closing*dt + 0.5(a_lead_meas - u)dt^2
+    #   >= s_min + tau(v_follow + u dt)
     c = 0.5 * dt * dt + tau_safe * dt                      # > 0, coefficient on -u
     rhs = (s_min + tau_safe * v_follow - gap
-           - (v_lead - v_follow) * dt - 0.5 * a_lead * dt * dt)
+           - closing_meas * dt - 0.5 * a_lead_meas * dt * dt)
     u_safe_hi = -rhs / c
     hi = torch.minimum(hi, u_safe_hi)
     # safety dominates if the box is empty
@@ -117,7 +122,7 @@ class ConvoyController:
         scale = mu / 0.9
         return self.cfg.a_min * scale, self.cfg.a_max * scale
 
-    def _project(self, u_raw, v_follow, gap, v_lead, a_lead, a_prev, mu):
+    def _project(self, u_raw, v_follow, gap, closing_meas, a_lead_meas, a_prev, mu):
         c = self.cfg
         a_min_s, a_max_s = self._mu_bounds(mu)
         v = torch.as_tensor(v_follow, dtype=torch.float32)
@@ -126,8 +131,8 @@ class ConvoyController:
             c.m_eff, torch.tensor(c.dP_max))
         return project_command(
             u_raw, v, torch.as_tensor(gap, dtype=torch.float32),
-            torch.as_tensor(v_lead, dtype=torch.float32),
-            torch.as_tensor(a_lead, dtype=torch.float32),
+            torch.as_tensor(closing_meas, dtype=torch.float32),
+            torch.as_tensor(a_lead_meas, dtype=torch.float32),
             dt=c.dt, s_min=c.s_min, tau_safe=c.tau_safe,
             a_min=torch.tensor(a_min_s), a_max=torch.tensor(a_max_s),
             du_max=(du_lo, du_hi))
@@ -173,6 +178,83 @@ class ConvoyController:
                 opt.zero_grad(); loss.backward(); opt.step()
         return self
 
+    # -- closed-loop training through the differentiable projection sim -- #
+    def fit_closed_loop(self, strings, idxs, epochs=25, lr=1e-3, trunc=25,
+                        w_track=1.0, w_speed=0.3, w_u=0.01, mu=0.9, seed=7):
+        """Fine-tune the policy by back-propagating a tracking + safety loss through
+        the closed-loop convoy rollout, with the (differentiable) hard projection in
+        the loop. This removes the compounding error of one-step behaviour cloning.
+
+        The same procedure trains every neural variant; only the per-step feasibility
+        treatment differs (projection / actuator-clamp / soft-penalty), so the
+        projection ablation holds training constant. Requires ``fit`` first (for
+        feature normalisation + warm start). Uses truncated BPTT.
+        """
+        assert self.x_mean is not None, "call fit() first for normalisation + warm start"
+        torch.manual_seed(seed)
+        c = self.cfg
+        dt = c.dt
+        a_min_s, a_max_s = self._mu_bounds(mu)
+        a_min_t, a_max_t = torch.tensor(a_min_s), torch.tensor(a_max_s)
+        xm, xs = self.x_mean.squeeze(0), self.x_std.squeeze(0)   # [5]
+        opt = torch.optim.Adam(self.policy.parameters(), lr=lr)
+        g = torch.Generator().manual_seed(seed)
+
+        for _ in range(epochs):
+            for i in [int(x) for x in torch.randperm(len(idxs), generator=g)]:
+                s = strings[idxs[i]]
+                T, N = s["T"], s["N"]
+                length = torch.tensor(s["length"], dtype=torch.float32)          # [N]
+                lead_pos = torch.tensor(s["pos"][:, 0], dtype=torch.float32)
+                lead_vel = torch.tensor(s["vel"][:, 0], dtype=torch.float32)
+                lead_acc = torch.tensor(s["acc"][:, 0], dtype=torch.float32)
+                pos = torch.tensor(s["pos"][0], dtype=torch.float32)             # [N]
+                vel = torch.tensor(s["vel"][0], dtype=torch.float32)
+                a_prev = torch.zeros(N)
+                loss = torch.tensor(0.0); count = 0
+                opt.zero_grad()
+                for t in range(T - 1):
+                    # followers 1..N-1 in parallel, from time-t predecessor state
+                    gap = pos[:-1] - pos[1:] - length[:-1]                       # [N-1]
+                    vf, vl, al = vel[1:], vel[:-1], a_prev[:-1]
+                    closing = vl - vf
+                    gap_err = gap - (c.s_min + c.tau_safe * vf)
+                    feats = torch.stack([vf, gap, closing, gap_err, al], dim=-1) # [N-1,5]
+                    feats = (feats - xm) / xs
+                    u_raw = self.policy(feats)                                   # [N-1]
+                    if c.mode == "dpcnc":
+                        du_lo, du_hi = accel_ramp_bounds(a_prev[1:], vf, c.m_eff,
+                                                         torch.tensor(c.dP_max))
+                        u = project_command(u_raw, vf, gap, vl - vf, al, dt=dt,
+                                            s_min=c.s_min, tau_safe=c.tau_safe,
+                                            a_min=a_min_t, a_max=a_max_t,
+                                            du_max=(du_lo, du_hi))
+                    else:
+                        u = torch.clamp(u_raw, a_min_s, a_max_s)
+                    nv = torch.relu(vf + u * dt)                                 # [N-1]
+                    npos_f = pos[1:] + vel[1:] * dt + 0.5 * u * dt * dt
+                    new_pos = torch.cat([lead_pos[t + 1:t + 2], npos_f])
+                    new_vel = torch.cat([lead_vel[t + 1:t + 2], nv])
+                    a_prev = torch.cat([lead_acc[t:t + 1], u])
+                    new_gap = new_pos[:-1] - new_pos[1:] - length[:-1]
+                    safe = c.s_min + c.tau_safe * nv
+                    step_loss = (w_track * (new_gap - safe) ** 2
+                                 + w_speed * (nv - vl) ** 2 + w_u * u ** 2).sum()
+                    if c.mode == "soft_pinn":
+                        step_loss = step_loss + c.soft_penalty_weight * \
+                            (torch.clamp(safe - new_gap, min=0.0) ** 2).sum()
+                    loss = loss + step_loss
+                    count += (N - 1)
+                    pos, vel = new_pos, new_vel
+                    if (t + 1) % trunc == 0:
+                        (loss / max(count, 1)).backward()
+                        opt.step(); opt.zero_grad()
+                        pos = pos.detach(); vel = vel.detach(); a_prev = a_prev.detach()
+                        loss = torch.tensor(0.0); count = 0
+                if count > 0:
+                    (loss / count).backward(); opt.step(); opt.zero_grad()
+        return self
+
     # -- closed-loop rollout over a real leader trajectory -- #
     @torch.no_grad()
     def rollout(self, s: dict, mu: float = 0.9, telemetry=None, energy=None):
@@ -187,6 +269,9 @@ class ConvoyController:
                       a_max=c.a_max, a_min=c.a_min)
 
         def step_fn(obs):
+            # policy consumes REPORTED V2V telemetry (obs.vl, obs.al) -- spoofable;
+            # projection uses MEASURED gap-rate / predecessor accel (obs.gap_rate,
+            # obs.al_meas) -- trusted onboard radar.
             feats = self._features(
                 torch.tensor(obs.vf, dtype=torch.float32),
                 torch.tensor(obs.gap, dtype=torch.float32),
@@ -194,7 +279,7 @@ class ConvoyController:
                 torch.tensor(obs.al, dtype=torch.float32))
             u_raw = self.policy(feats.unsqueeze(0)).squeeze(0)
             if c.mode == "dpcnc":
-                u = self._project(u_raw, obs.vf, obs.gap, obs.vl, obs.al,
+                u = self._project(u_raw, obs.vf, obs.gap, obs.gap_rate, obs.al_meas,
                                   obs.a_prev, obs.mu)
             else:
                 a_min_s, a_max_s = self._mu_bounds(obs.mu)

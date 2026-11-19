@@ -19,14 +19,15 @@ def test_safety_bound_always_satisfied():
         v_lead = float(rng.uniform(0, 30))
         a_lead = float(rng.uniform(-5, 3))
         u_raw = torch.tensor(float(rng.uniform(-20, 20)))  # arbitrary, possibly unsafe
+        closing = v_lead - v                                # measured relative velocity
         du_lo, du_hi = accel_ramp_bounds(torch.tensor(0.0), torch.tensor(v), 1500.0, torch.tensor(60000.0))
         u = project_command(
-            u_raw, torch.tensor(v), torch.tensor(gap), torch.tensor(v_lead),
+            u_raw, torch.tensor(v), torch.tensor(gap), torch.tensor(closing),
             torch.tensor(a_lead), dt=dt, s_min=s_min, tau_safe=tau,
             a_min=torch.tensor(-5.0), a_max=torch.tensor(2.5), du_max=(du_lo, du_hi))
         u = float(u)
         # next-step predicted gap and safe gap
-        gap_next = gap + (v_lead - v) * dt + 0.5 * (a_lead - u) * dt * dt
+        gap_next = gap + closing * dt + 0.5 * (a_lead - u) * dt * dt
         v_next = v + u * dt
         safe = s_min + tau * v_next
         # guarantee holds to float32 numerical precision (sub-mm)

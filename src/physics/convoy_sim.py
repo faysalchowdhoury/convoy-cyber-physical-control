@@ -27,10 +27,12 @@ class Obs:
     j: int
     gap: float
     vf: float
-    vl: float
-    al: float
+    vl: float          # REPORTED predecessor speed (V2V; may be spoofed)
+    al: float          # REPORTED predecessor accel (V2V; may be spoofed)
     a_prev: float
     mu: float
+    gap_rate: float = 0.0   # MEASURED d(gap)/dt (onboard radar; trusted)
+    al_meas: float = 0.0    # MEASURED predecessor accel (onboard radar; trusted)
 
 
 def mu_bounds(p: SimParams, mu: float):
@@ -56,10 +58,14 @@ def simulate(step_fn, s: dict, p: SimParams, mu: float = 0.9,
         for j in range(1, N):
             gap = pos[t, j - 1] - pos[t, j] - s["length"][j - 1]
             vf = vel[t, j]
-            vl = float(v_lead_src[t, j - 1])
-            al = float(a_lead_src[t, j - 1])
+            vl = float(v_lead_src[t, j - 1])          # reported (spoofable)
+            al = float(a_lead_src[t, j - 1])          # reported (spoofable)
+            # measured / trusted onboard radar: relative velocity and predecessor accel
+            gap_rate = float(vel[t, j - 1] - vel[t, j])
+            al_meas = float((vel[t, j - 1] - vel[t - 1, j - 1]) / dt) if t > 0 else 0.0
             obs = Obs(t=t, j=j, gap=gap, vf=vf, vl=vl, al=al,
-                      a_prev=acc[t - 1, j] if t > 0 else 0.0, mu=mu)
+                      a_prev=acc[t - 1, j] if t > 0 else 0.0, mu=mu,
+                      gap_rate=gap_rate, al_meas=al_meas)
             t0 = _time.perf_counter()
             u = step_fn(obs)
             inf_times.append((_time.perf_counter() - t0) * 1e3)

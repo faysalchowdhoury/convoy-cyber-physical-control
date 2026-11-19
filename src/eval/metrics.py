@@ -54,6 +54,35 @@ def anomaly_metrics(scores: np.ndarray, labels: np.ndarray, threshold: float,
     }
 
 
+def bootstrap_ci(values, n: int = 2000, seed: int = 0) -> dict:
+    """Mean and 95% percentile CI of the mean, by resampling items with replacement."""
+    rng = np.random.default_rng(seed)
+    vals = np.asarray(values, float)
+    vals = vals[np.isfinite(vals)]
+    if len(vals) == 0:
+        return {"mean": float("nan"), "lo": float("nan"), "hi": float("nan")}
+    boots = np.array([rng.choice(vals, size=len(vals), replace=True).mean() for _ in range(n)])
+    return {"mean": float(vals.mean()), "lo": float(np.percentile(boots, 2.5)),
+            "hi": float(np.percentile(boots, 97.5))}
+
+
+def bootstrap_auroc(scores, labels, n: int = 2000, seed: int = 0) -> dict:
+    """AUROC with a 95% percentile CI, resampling (score,label) pairs."""
+    rng = np.random.default_rng(seed)
+    scores = np.asarray(scores, float); labels = np.asarray(labels, int)
+    m = len(scores)
+    boots = []
+    for _ in range(n):
+        idx = rng.integers(0, m, size=m)
+        a = _auroc(scores[idx], labels[idx])
+        if np.isfinite(a):
+            boots.append(a)
+    boots = np.array(boots)
+    return {"auroc": float(_auroc(scores, labels)),
+            "lo": float(np.percentile(boots, 2.5)) if len(boots) else float("nan"),
+            "hi": float(np.percentile(boots, 97.5)) if len(boots) else float("nan")}
+
+
 def _auroc(scores: np.ndarray, labels: np.ndarray) -> float:
     pos = scores[labels == 1]; neg = scores[labels == 0]
     if len(pos) == 0 or len(neg) == 0:

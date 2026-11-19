@@ -28,8 +28,10 @@ from src.physics.hard_projection_control import ConvoyController  # noqa: E402
 from src.security.channel import degrade_telemetry, attack_telemetry_v2v  # noqa: E402
 from src.security.cross_layer_ids import (  # noqa: E402
     fit_onboard_model, CrossLayerIDS, ved_load_pool, build_ids_records,
-    inject_v2v_bias, inject_v2v_replay, inject_can_bias, sanitize_telemetry)
-from src.eval.metrics import aggregate_control, spacing_rmse, anomaly_metrics  # noqa: E402
+    inject_v2v_bias, inject_v2v_replay, inject_v2v_ramp, inject_can_bias,
+    sanitize_telemetry)
+from src.eval.metrics import (aggregate_control, spacing_rmse, anomaly_metrics,  # noqa: E402
+                              bootstrap_ci, bootstrap_auroc)
 from src.eval.tables import write_table, write_metrics_json  # noqa: E402
 from src.eval import figures as F  # noqa: E402
 
@@ -93,11 +95,19 @@ def main():
     # ---- controllers (train the neural ones on train split) ---- #
     print("[3/6] training controllers ...", flush=True)
     ctrls = build_controllers(model, platoons.energy.mass)
+    cl = model["controller"]["closed_loop"]
     for name, c in ctrls.items():
         if isinstance(c, ConvoyController):
+            # stage 1: behaviour-cloning warm start (also sets feature normalisation)
             c.fit(platoons.strings, tr, epochs=model["controller"]["epochs"],
                   lr=model["controller"]["lr"], batch=model["controller"]["batch"],
                   wd=model["controller"]["weight_decay"], seed=seed)
+            # stage 2: closed-loop fine-tune through the differentiable sim (same for
+            # all neural variants; only the feasibility treatment differs)
+            c.fit_closed_loop(platoons.strings, tr, epochs=cl["epochs"], lr=cl["lr"],
+                              trunc=cl["trunc"], w_track=cl["w_track"],
+                              w_speed=cl["w_speed"], w_u=cl["w_u"],
+                              mu=friction["high"], seed=seed)
 
     rng = np.random.default_rng(seed)
 
@@ -160,6 +170,7 @@ def main():
     }
     arng = np.random.default_rng(seed + 2)
     t3_rows = []
+    auroc_cis = {}
     for atk_name, fn in attack_specs.items():
         pos_scores, delays = [], []
         for r in clean_test:
@@ -171,21 +182,53 @@ def main():
         m = anomaly_metrics(scores, labels, ids.threshold, delays)
         m["detection_latency_ms"] = (m["detection_delay_steps"] * ph["dt"] * 1000
                                      if np.isfinite(m["detection_delay_steps"]) else float("nan"))
-        t3_rows.append({"attack": atk_name, "auroc": m["auroc"], "f1": m["f1"],
+        ci = bootstrap_auroc(scores, labels, seed=seed)
+        auroc_cis[atk_name] = ci
+        t3_rows.append({"attack": atk_name, "auroc": m["auroc"],
+                        "auroc_lo": ci["lo"], "auroc_hi": ci["hi"], "f1": m["f1"],
                         "detection_latency_ms": m["detection_latency_ms"],
                         "fpr": m["fpr"]})
 
-    # convoy collision/instability under attack: guarded vs unguarded (D-PCNC)
+    # adaptive / stealthy attacker: detection vs attack aggressiveness (step vs ramp)
+    mags = [0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
+    sweep = {"magnitude": mags, "auroc_step": [], "auroc_ramp": [],
+             "recall_step": [], "recall_ramp": []}
+    srng = np.random.default_rng(seed + 5)
+    for mag in mags:
+        for kind, fn in (("step", lambda r, o, mg=mag: inject_v2v_bias(r, mg, o)),
+                         ("ramp", lambda r, o, mg=mag: inject_v2v_ramp(r, mg, o))):
+            pos_s, dl = [], []
+            for r in clean_test:
+                onset = int(srng.integers(len(r["v_follow"]) // 4, len(r["v_follow"]) // 2))
+                rep = ids.run(fn(r, onset))
+                pos_s.append(rep.scores.max()); dl.append(rep.delay)
+            sc = np.array(neg_scores + pos_s)
+            lb = np.array([0] * len(neg_scores) + [1] * len(pos_s))
+            mm = anomaly_metrics(sc, lb, ids.threshold, dl)
+            sweep[f"auroc_{kind}"].append(mm["auroc"])
+            sweep[f"recall_{kind}"].append(mm["recall"])
+    t3b = pd.DataFrame({"magnitude_ms": mags, "auroc_step": sweep["auroc_step"],
+                        "auroc_ramp": sweep["auroc_ramp"], "recall_step": sweep["recall_step"],
+                        "recall_ramp": sweep["recall_ramp"]})
+    write_table(t3b, ROOT / "results/table3b_adaptive_attacker.csv", index=False)
+
+    # convoy safety under V2V telemetry spoofing. The key comparison: a nominally-
+    # trained policy WITHOUT the projection (trusts spoofed predecessor speed) vs
+    # D-PCNC WITH the projection (falls back on the measured gap) vs D-PCNC + guard.
     dpcnc = ctrls["D-PCNC"]
-    guarded_col = unguarded_col = 0
-    guarded_viol, unguarded_viol = [], []
+    uncon = ctrls["Unconstrained-NN"]
+    guarded_col = unguarded_col = uncon_col = 0
+    guarded_viol, unguarded_viol, uncon_viol = [], [], []
     trace = None
     grng = np.random.default_rng(seed + 3)
     for i in te_eval:
         s = platoons.strings[i]
         onset = s["T"] // 3
         v_atk, a_atk = attack_telemetry_v2v(s, exp["attack_regimes"]["v2v_spoof"]["magnitude"], onset)
-        # unguarded
+        # no-projection policy under the same spoof (trusts the spoofed telemetry)
+        r_np = uncon.rollout(s, mu=friction["high"], telemetry=(v_atk, a_atk), energy=platoons.energy)
+        uncon_col += r_np["collisions"]; uncon_viol.append(r_np["headway_violation"])
+        # D-PCNC, projection only (no guard)
         r_u = dpcnc.rollout(s, mu=friction["high"], telemetry=(v_atk, a_atk), energy=platoons.energy)
         unguarded_col += r_u["collisions"]; unguarded_viol.append(r_u["headway_violation"])
         # guarded: per-follower IDS flags -> sanitize each predecessor column
@@ -220,10 +263,12 @@ def main():
     write_table(t3, ROOT / "results/table3_cross_layer_detection.csv", index=False)
     resilience = {
         "attack": "V2V speed spoof (+4 m/s)",
-        "unguarded_collisions": int(unguarded_col),
-        "guarded_collisions": int(guarded_col),
-        "unguarded_headway_violation_pct": 100 * float(np.mean(unguarded_viol)),
-        "guarded_headway_violation_pct": 100 * float(np.mean(guarded_viol)),
+        "no_projection_collisions": int(uncon_col),
+        "no_projection_headway_violation_pct": 100 * float(np.mean(uncon_viol)),
+        "projection_collisions": int(unguarded_col),
+        "projection_headway_violation_pct": 100 * float(np.mean(unguarded_viol)),
+        "projection_plus_guard_collisions": int(guarded_col),
+        "projection_plus_guard_headway_violation_pct": 100 * float(np.mean(guarded_viol)),
         "strings_evaluated": len(te_eval),
     }
 
@@ -257,6 +302,17 @@ def main():
     if trace is not None:
         F.fig3_cross_layer_cyber_resilience(trace, ROOT / "results/figures")
 
+    # fig4: adaptive/stealthy attacker sweep
+    F.fig4_adaptive_attacker(sweep, ROOT / "results/figures")
+
+    # ---- bootstrap confidence intervals (statistical rigor) ---- #
+    _, dp_res = cache_clean_high["D-PCNC"]
+    control_ci = {
+        "D-PCNC_spacing_rmse_m": bootstrap_ci([r["spacing_rmse_m"] for r in dp_res], seed=seed),
+        "D-PCNC_headway_violation_frac": bootstrap_ci([r["headway_violation"] for r in dp_res], seed=seed),
+        "D-PCNC_collisions_per_string": bootstrap_ci([r["collisions"] for r in dp_res], seed=seed),
+    }
+
     # ---- metrics.json + environment.json ---- #
     all_metrics = {
         "data": platoons.meta,
@@ -268,6 +324,9 @@ def main():
         "table1_control_energy": t1.to_dict(orient="records"),
         "table2_ablation": t2.to_dict(orient="records"),
         "table3_detection": t3.to_dict(orient="records"),
+        "table3b_adaptive_attacker": t3b.to_dict(orient="records"),
+        "detection_auroc_ci": auroc_cis,
+        "control_bootstrap_ci": control_ci,
         "convoy_resilience_under_attack": resilience,
         "runtime_s": round(time.time() - t_start, 1),
     }

@@ -78,6 +78,17 @@ def inject_v2v_bias(rec: dict, magnitude: float, onset: int) -> dict:
     return r
 
 
+def inject_v2v_ramp(rec: dict, magnitude: float, onset: int) -> dict:
+    """Stealthy slow-ramp spoof: predecessor speed drifts up gradually to evade a
+    step-change detector."""
+    r = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in rec.items()}
+    T = len(r["v_lead_rep"])
+    if T > onset:
+        r["v_lead_rep"][onset:] += np.linspace(0.0, magnitude, T - onset)
+    r["label"] = 1; r["onset"] = onset
+    return r
+
+
 def inject_v2v_replay(rec: dict, window: int, onset: int) -> dict:
     r = {k: (v.copy() if isinstance(v, np.ndarray) else v) for k, v in rec.items()}
     T = len(r["v_lead_rep"])
@@ -121,6 +132,8 @@ class CrossLayerIDS:
     dt: float
     scales: dict = field(default_factory=dict)
     threshold: float = float("inf")
+    cusum_k: np.ndarray = None          # per-channel drift allowance
+    cusum_scale: np.ndarray = None      # per-channel clean CUSUM normaliser
 
     # -- per-step residuals -- #
     def _residuals(self, rec: dict) -> np.ndarray:
@@ -137,21 +150,48 @@ class CrossLayerIDS:
         return np.stack([r_ego, r_pt, r_v2v, r_self], axis=1)
 
     # -- fit scales + threshold on clean training records -- #
-    def fit(self, clean_recs: list[dict], q: float = 0.99):
+    def fit(self, clean_recs: list[dict], q: float = 0.95):
         allr = [self._residuals(r) for r in clean_recs]
         R = np.concatenate(allr, axis=0)
-        self.scales = {i: float(np.median(np.abs(R[:, i])) + 1e-6) for i in range(R.shape[1])}
-        # Calibrate the threshold on clean WINDOW-max scores (not per-step): the
-        # detector classifies at window granularity, so a per-step quantile would
-        # inflate the window false-positive rate to ~1-(q)^T.
+        nch = R.shape[1]
+        self.scales = {i: float(np.median(np.abs(R[:, i])) + 1e-6) for i in range(nch)}
+        scaled = np.stack([R[:, i] / self.scales[i] for i in range(nch)], axis=1)
+        # CUSUM drift = clean per-channel 75th pct (benign variation passes through);
+        # scale = clean 95th pct of each channel's peak CUSUM (so clean peaks ~1).
+        self.cusum_k = np.quantile(scaled, 0.75, axis=0)
+        peaks = []
+        for r in clean_recs:
+            peaks.append(self._cusum(self._scaled(r)).max(axis=0))
+        self.cusum_scale = np.quantile(np.stack(peaks), 0.95, axis=0) + 1e-6
+        # Window-level threshold on clean train (per-step quantile would inflate the
+        # window false-positive rate to ~1-(q)^T).
         win_scores = np.array([self._score_steps(r).max() for r in clean_recs])
         self.threshold = float(np.quantile(win_scores, q))
         return self
 
-    def _score_steps(self, rec: dict) -> np.ndarray:
+    def _scaled(self, rec: dict) -> np.ndarray:
         R = self._residuals(rec)
-        scaled = np.stack([R[:, i] / self.scales.get(i, 1.0) for i in range(R.shape[1])], axis=1)
-        return scaled.max(axis=1)
+        return np.stack([R[:, i] / self.scales.get(i, 1.0) for i in range(R.shape[1])], axis=1)
+
+    def _cusum(self, scaled: np.ndarray) -> np.ndarray:
+        """Per-channel one-sided CUSUM S_t = max(0, S_{t-1} + scaled - k)."""
+        k = self.cusum_k if self.cusum_k is not None else 0.0
+        S = np.zeros(scaled.shape[1])
+        out = np.empty_like(scaled)
+        for t in range(scaled.shape[0]):
+            S = np.maximum(0.0, S + scaled[t] - k)
+            out[t] = S
+        return out
+
+    def _score_steps(self, rec: dict) -> np.ndarray:
+        """Combined score: instantaneous cross-layer inconsistency OR sequential
+        (CUSUM) evidence of a sustained, low-amplitude attack."""
+        scaled = self._scaled(rec)
+        instant = scaled.max(axis=1)
+        if self.cusum_scale is not None:
+            cusum = (self._cusum(scaled) / self.cusum_scale).max(axis=1)
+            return np.maximum(instant, cusum)
+        return instant
 
     def run(self, rec: dict) -> GuardReport:
         scores = self._score_steps(rec)

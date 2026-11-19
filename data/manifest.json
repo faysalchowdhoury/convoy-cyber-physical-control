@@ -9,7 +9,7 @@
       "vehicles": 800,
       "units": "SI (converted from NGSIM feet)",
       "note": "Real 10 Hz trajectories with native preceding/following linkage.",
-      "retrieved_utc": "2026-11-19T15:37:30Z"
+      "retrieved_utc": "2026-11-19T17:02:01Z"
     },
     "ved": {
       "url": "https://raw.githubusercontent.com/gsoh/VED/master/Data/VED_DynamicData_Part1.7z",
@@ -30,7 +30,7 @@
         "HV Battery SOC[%]"
       ],
       "note": "Real on-road OBD/powertrain telemetry (U. Michigan VED).",
-      "retrieved_utc": "2026-11-19T15:37:30Z"
+      "retrieved_utc": "2026-11-19T17:02:01Z"
     },
     "platoons": {
       "n_strings": 98,
@@ -42,7 +42,7 @@
       "ved_mean_power_w": 6497.7,
       "model_mean_power_w": 2779.4,
       "note": "Real NGSIM strings (vehicle-disjoint); energy = physics model with literature coefficients, VED magnitude-checked.",
-      "retrieved_utc": "2026-11-19T15:37:32Z"
+      "retrieved_utc": "2026-11-19T17:02:02Z"
     }
   }
 }

@@ -87,3 +87,22 @@ def fig3_cross_layer_cyber_resilience(trace: dict, out_dir):
     ax2.set_ylabel("Anomaly score")
     ax2.legend(loc="upper left", fontsize=9)
     _save(fig, out_dir, "fig3_cross_layer_cyber_resilience")
+
+
+def fig4_adaptive_attacker(sweep: dict, out_dir):
+    """sweep: {'magnitude':[...], 'auroc_step':[...], 'auroc_ramp':[...],
+              'recall_step':[...], 'recall_ramp':[...]}."""
+    _setup()
+    fig, ax = plt.subplots(figsize=(6.2, 4.2))
+    mags = sweep["magnitude"]
+    ax.plot(mags, sweep["auroc_step"], "-o", color="#0072B2", label="step spoof — AUROC")
+    ax.plot(mags, sweep["auroc_ramp"], "-s", color="#D55E00", label="slow-ramp spoof — AUROC")
+    ax.plot(mags, sweep["recall_step"], "--o", color="#56B4E9", label="step — recall@op")
+    ax.plot(mags, sweep["recall_ramp"], "--s", color="#E69F00", label="ramp — recall@op")
+    ax.axhline(0.5, color="gray", ls=":", lw=1)
+    ax.set_xlabel("Attack magnitude (m/s bias)")
+    ax.set_ylabel("Detection")
+    ax.set_ylim(0, 1.03)
+    ax.set_title("Detection vs attack aggressiveness (adaptive/stealthy attacker)")
+    ax.legend(fontsize=8)
+    _save(fig, out_dir, "fig4_adaptive_attacker")
