@@ -99,6 +99,8 @@ This is the paper's core result: **the hard projection buys cyber-physical
 robustness** — a ~52% violation reduction under spoofing — because its safety
 guarantee depends only on trusted onboard sensing.
 
+![Coordinated V2V+CAN spoof: the guard/projection keeps the gap safe](results/figures/fig3_cross_layer_cyber_resilience.png)
+
 ### 2. In benign conditions the projection *costs* performance (reported plainly)
 
 With all neural controllers trained identically in closed loop, the projection is
@@ -117,6 +119,9 @@ and is as safe as the baselines in benign conditions; D-PCNC's projection adds
 ~2.5 m of spacing error and the most energy. All controllers run **sub-millisecond**.
 (Behaviour cloning alone gave D-PCNC a 20.6 m error; closed-loop training cut it to
 4.55 m — see `fit_closed_loop`.)
+
+![Safety vs energy: the hard projection trades energy/tracking for its guarantee](results/figures/fig2_hard_projection_ablation.png)
+![Disturbance propagation along the convoy under packet loss](results/figures/fig1_string_stability_and_safety.png)
 
 ### 3. Cross-layer detection: strong on aggressive attacks, graceful decay, honest failures
 
@@ -137,6 +142,8 @@ CAN **load injection is undetectable here** (CI includes 0.50) — a direct
 consequence of the constructed cross-modal vehicle (load and kinematics come from
 different vehicles, so there is no real consistency to break); and the detector
 is a magnitude/stealth-limited device, not a universal one.
+
+![Detection vs attack aggressiveness: step spoofs caught, slow-ramp stealth evades](results/figures/fig4_adaptive_attacker.png)
 
 ### 4. The telemetry guard adds little on top of the projection
 
